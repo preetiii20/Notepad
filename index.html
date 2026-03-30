@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reminder Notepad</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Mono:wght@300;400;500&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #f5f0e8;
+    --parchment: #ede8dc;
+    --warm-white: #faf8f4;
+    --ink: #2a2018;
+    --ink-light: #5a4e3a;
+    --accent: #c4401c;
+    --accent-muted: #e8896a;
+    --gold: #c49a2a;
+    --gold-light: #f0d878;
+    --sage: #6b7c5e;
+    --ruled: rgba(42,32,24,0.10);
+    --shadow: rgba(42,32,24,0.18);
+    --today-bg: #c4401c;
+    --task-done: #6b7c5e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #d4c9b4;
+    background-image: 
+      radial-gradient(ellipse at 20% 20%, #c9b99a 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 80%, #b8a888 0%, transparent 60%);
+    min-height: 100vh;
+    font-family: 'DM Mono', monospace;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+
+  .app {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 0;
+    width: 100%;
+    max-width: 1000px;
+    min-height: 680px;
+    border-radius: 4px 16px 16px 4px;
+    box-shadow: 
+      -6px 6px 0 #b0a08a,
+      0 20px 60px rgba(0,0,0,0.35),
+      0 4px 12px rgba(0,0,0,0.2);
+    animation: pageOpen 0.6s cubic-bezier(0.23, 1, 0.32, 1) both;
+  }
+
+  @keyframes pageOpen {
+    from { opacity: 0; transform: perspective(1000px) rotateY(-8deg) translateY(20px); }
+    to { opacity: 1; transform: perspective(1000px) rotateY(0deg) translateY(0); }
+  }
+
+  /* ─── LEFT: CALENDAR PANEL ─── */
+  .cal-panel {
+    background: var(--ink);
+    border-radius: 4px 0 0 4px;
+    padding: 32px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cal-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: 
+      radial-gradient(ellipse at 30% 20%, rgba(196,154,42,0.15) 0%, transparent 60%),
+      radial-gradient(ellipse at 70% 80%, rgba(196,64,28,0.12) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .cal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--gold-light);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .cal-nav {
+    display: flex;
+    gap: 6px;
+  }
+
+  .cal-nav button {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: var(--gold-light);
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cal-nav button:hover { background: rgba(255,255,255,0.18); }
+
+  .cal-grid {
+    position: relative; z-index: 1;
+  }
+
+  .dow-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    margin-bottom: 8px;
+  }
+  .dow {
+    text-align: center;
+    font-size: 9px;
+    font-weight: 500;
+    color: rgba(240,216,120,0.55);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 4px 0;
+  }
+
+  .day-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+  }
+
+  .day-cell {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.6);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.18s;
+    position: relative;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .day-cell:hover:not(.empty):not(.today) {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+  }
+
+  .day-cell.other-month { color: rgba(255,255,255,0.18); cursor: default; }
+
+  .day-cell.today {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 0 0 2px rgba(196,64,28,0.4), 0 4px 12px rgba(196,64,28,0.35);
+  }
+
+  .day-cell.selected:not(.today) {
+    background: rgba(196,154,42,0.25);
+    color: var(--gold-light);
+    border: 1px solid rgba(196,154,42,0.5);
+  }
+
+  .day-cell.has-tasks::after {
+    content: '';
+    position: absolute;
+    bottom: 3px;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--gold);
+  }
+
+  .task-count-bar {
+    position: relative; z-index: 1;
+    background: rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 16px;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .count-label {
+    font-size: 10px;
+    color: rgba(240,216,120,0.55);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .count-number {
+    font-family: 'Playfair Display', serif;
+    font-size: 38px;
+    color: #fff;
+    line-height: 1;
+  }
+
+  .count-sub {
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    margin-top: 4px;
+  }
+
+  .mini-progress {
+    margin-top: 12px;
+    height: 3px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .mini-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--gold));
+    border-radius: 2px;
+    transition: width 0.5s ease;
+  }
+
+  /* ─── RIGHT: NOTEPAD PANEL ─── */
+  .note-panel {
+    background: var(--cream);
+    border-radius: 0 16px 16px 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Ruled lines */
+  .note-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 47px,
+      var(--ruled) 47px,
+      var(--ruled) 48px
+    );
+    background-position: 0 64px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Red margin line */
+  .note-panel::after {
+    content: '';
+    position: absolute;
+    left: 52px;
+    top: 0; bottom: 0;
+    width: 1.5px;
+    background: rgba(196,64,28,0.25);
+    z-index: 0;
+  }
+
+  .note-header {
+    padding: 20px 28px 16px 68px;
+    position: relative; z-index: 1;
+    border-bottom: 2px solid var(--ruled);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .note-date-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--ink);
+    font-weight: 700;
+  }
+
+  .note-date-sub {
+    font-size: 10px;
+    color: var(--ink-light);
+    margin-top: 2px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .line-nums {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 20px;
+    gap: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  /* Add task bar */
+  .add-bar {
+    padding: 14px 24px 14px 68px;
+    display: flex;
+    gap: 10px;
+    position: relative; z-index: 1;
+    border-bottom: 1px solid var(--ruled);
+    background: rgba(255,255,255,0.5);
+  }
+
+  .add-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: 'Lora', serif;
+    font-size: 14px;
+    color: var(--ink);
+    font-style: italic;
+  }
+
+  .add-input::placeholder { color: rgba(90,78,58,0.4); }
+
+  .tag-select {
+    background: transparent;
+    border: 1px solid rgba(90,78,58,0.2);
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-light);
+    cursor: pointer;
+    outline: none;
+  }
+
+  .add-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+  .add-btn:hover { background: #a83214; transform: translateY(-1px); }
+
+  /* Tasks list */
+  .tasks-area {
+    flex: 1;
+    padding: 10px 24px 20px 68px;
+    overflow-y: auto;
+    position: relative; z-index: 1;
+  }
+
+  .tasks-area::-webkit-scrollbar { width: 4px; }
+  .tasks-area::-webkit-scrollbar-track { background: transparent; }
+  .tasks-area::-webkit-scrollbar-thumb { background: rgba(90,78,58,0.2); border-radius: 2px; }
+
+  .empty-state {
+    margin-top: 40px;
+    text-align: center;
+    color: rgba(90,78,58,0.35);
+  }
+
+  .empty-state .empty-icon {
+    font-size: 36px;
+    margin-bottom: 12px;
+    display: block;
+    opacity: 0.4;
+  }
+
+  .empty-state p {
+    font-family: 'Lora', serif;
+    font-style: italic;
+    font-size: 14px;
+  }
+
+  .task-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px dashed rgba(90,78,58,0.1);
+    animation: slideIn 0.3s cubic-bezier(0.23, 1, 0.32, 1) both;
+    position: relative;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-12px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .task-check {
+    width: 18px; height: 18px;
+    border: 1.5px solid rgba(90,78,58,0.35);
+    border-radius: 3px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+    transition: all 0.2s;
+    background: transparent;
+  }
+
+  .task-check:hover { border-color: var(--accent); }
+  .task-check.checked { background: var(--task-done); border-color: var(--task-done); }
+
+  .check-mark {
+    color: #fff;
+    font-size: 10px;
+    display: none;
+  }
+  .task-check.checked .check-mark { display: block; }
+
+  .task-body { flex: 1; min-width: 0; }
+
+  .task-text {
+    font-family: 'Lora', serif;
+    font-size: 14px;
+    color: var(--ink);
+    line-height: 1.5;
+    transition: all 0.25s;
+    word-break: break-word;
+  }
+
+  .task-text.done {
+    text-decoration: line-through;
+    color: rgba(90,78,58,0.4);
+  }
+
+  .task-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .task-tag {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+  }
+
+  .tag-work { background: rgba(196,64,28,0.12); color: var(--accent); }
+  .tag-personal { background: rgba(107,124,94,0.15); color: var(--sage); }
+  .tag-urgent { background: rgba(196,154,42,0.15); color: var(--gold); }
+  .tag-health { background: rgba(100,149,237,0.15); color: #4a7abf; }
+  .tag-other { background: rgba(90,78,58,0.1); color: var(--ink-light); }
+
+  .task-time {
+    font-size: 10px;
+    color: rgba(90,78,58,0.4);
+    font-family: 'DM Mono', monospace;
+  }
+
+  .task-del {
+    opacity: 0;
+    background: none;
+    border: none;
+    color: rgba(196,64,28,0.5);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .task-item:hover .task-del { opacity: 1; }
+  .task-del:hover { color: var(--accent); background: rgba(196,64,28,0.08); }
+
+  /* Priority dot */
+  .priority-dot {
+    position: absolute;
+    left: -16px;
+    top: 16px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+  }
+
+  .priority-high { background: var(--accent); }
+  .priority-med { background: var(--gold); }
+  .priority-low { background: var(--sage); }
+
+  /* Note footer */
+  .note-footer {
+    padding: 10px 24px 14px 68px;
+    position: relative; z-index: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--ruled);
+    background: rgba(255,255,255,0.4);
+  }
+
+  .footer-quote {
+    font-family: 'Lora', serif;
+    font-style: italic;
+    font-size: 11px;
+    color: rgba(90,78,58,0.4);
+  }
+
+  .filter-btns {
+    display: flex;
+    gap: 6px;
+  }
+
+  .filter-btn {
+    background: transparent;
+    border: 1px solid rgba(90,78,58,0.18);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-light);
+    cursor: pointer;
+    transition: all 0.18s;
+    letter-spacing: 0.05em;
+  }
+
+  .filter-btn.active, .filter-btn:hover {
+    background: var(--ink);
+    color: var(--cream);
+    border-color: var(--ink);
+  }
+
+  /* Tooltip / ribbon */
+  .panel-ribbon {
+    position: absolute;
+    top: 20px;
+    right: -1px;
+    background: var(--gold);
+    color: var(--ink);
+    font-size: 9px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 12px 4px 10px;
+    border-radius: 3px 0 0 3px;
+    box-shadow: -2px 2px 8px rgba(0,0,0,0.15);
+  }
+
+  /* ── always-visible delete ── */
+  .task-del { opacity: 0.45; }
+  .task-item:hover .task-del { opacity: 1; }
+
+  /* ─── MINI NOTEBOOK ─── */
+  .notebook-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(30,22,12,0.45);
+    backdrop-filter: blur(3px);
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+  }
+  .notebook-overlay.open { display: flex; }
+
+  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+  .notebook {
+    width: 520px;
+    max-width: 95vw;
+    max-height: 88vh;
+    background: #fdf9f2;
+    border-radius: 3px 14px 14px 3px;
+    box-shadow:
+      -5px 5px 0 #c4b89a,
+      0 24px 64px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: popIn 0.3s cubic-bezier(0.23,1,0.32,1) both;
+    position: relative;
+  }
+
+  @keyframes popIn {
+    from { opacity:0; transform: scale(0.92) translateY(20px); }
+    to   { opacity:1; transform: scale(1) translateY(0); }
+  }
+
+  /* ruled lines on notebook */
+  .notebook::before {
+    content:'';
+    position:absolute; inset:0;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0px, transparent 31px,
+      rgba(42,32,24,0.09) 31px, rgba(42,32,24,0.09) 32px
+    );
+    background-position: 0 72px;
+    pointer-events:none; z-index:0;
+  }
+  /* margin line */
+  .notebook::after {
+    content:'';
+    position:absolute;
+    left:46px; top:0; bottom:0;
+    width:1.5px;
+    background: rgba(196,64,28,0.22);
+    z-index:0;
+  }
+
+  .nb-header {
+    padding: 18px 20px 14px 60px;
+    border-bottom: 2px solid rgba(42,32,24,0.09);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative; z-index:1;
+    background: rgba(255,255,255,0.6);
+  }
+
+  .nb-title-wrap { }
+
+  .nb-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 17px;
+    color: var(--ink);
+    font-weight: 700;
+  }
+
+  .nb-sub {
+    font-size: 9px;
+    color: var(--ink-light);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .nb-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--ink-light);
+    font-size: 18px;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.18s;
+  }
+  .nb-close:hover { background: rgba(196,64,28,0.1); color: var(--accent); }
+
+  /* Tabs */
+  .nb-tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 20px 0 60px;
+    border-bottom: 1px solid rgba(42,32,24,0.1);
+    background: rgba(255,255,255,0.4);
+    position: relative; z-index:1;
+  }
+
+  .nb-tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 8px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-light);
+    cursor: pointer;
+    transition: all 0.18s;
+    margin-bottom: -1px;
+  }
+  .nb-tab.active {
+    border-bottom-color: var(--accent);
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .nb-tab:hover:not(.active) { color: var(--ink); }
+
+  /* Note add bar */
+  .nb-add-bar {
+    padding: 10px 16px 10px 60px;
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid rgba(42,32,24,0.08);
+    background: rgba(255,255,255,0.5);
+    position: relative; z-index:1;
+  }
+
+  .nb-input {
+    flex:1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: 'Lora', serif;
+    font-size: 13px;
+    font-style: italic;
+    color: var(--ink);
+    resize: none;
+    height: 32px;
+    line-height: 1.5;
+  }
+  .nb-input::placeholder { color: rgba(90,78,58,0.38); }
+
+  .nb-add-btn {
+    background: var(--ink);
+    color: var(--cream);
+    border: none;
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.18s;
+    white-space: nowrap;
+    letter-spacing: 0.04em;
+  }
+  .nb-add-btn:hover { background: var(--accent); }
+
+  /* Notes list */
+  .nb-list {
+    flex:1;
+    overflow-y: auto;
+    padding: 8px 16px 16px 60px;
+    position: relative; z-index:1;
+  }
+  .nb-list::-webkit-scrollbar { width:3px; }
+  .nb-list::-webkit-scrollbar-thumb { background: rgba(90,78,58,0.18); border-radius:2px; }
+
+  .nb-empty {
+    text-align: center;
+    margin-top: 36px;
+    color: rgba(90,78,58,0.32);
+  }
+  .nb-empty span { font-size:28px; display:block; margin-bottom:8px; opacity:0.4; }
+  .nb-empty p { font-family:'Lora',serif; font-style:italic; font-size:13px; }
+
+  .nb-note {
+    padding: 10px 0;
+    border-bottom: 1px dashed rgba(42,32,24,0.09);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    animation: slideIn 0.25s cubic-bezier(0.23,1,0.32,1) both;
+  }
+
+  .nb-note-body { flex:1; min-width:0; }
+
+  .nb-note-text {
+    font-family: 'Lora', serif;
+    font-size: 13px;
+    color: var(--ink);
+    line-height: 1.6;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+
+  .nb-note-text.done-note {
+    text-decoration: line-through;
+    color: rgba(90,78,58,0.38);
+  }
+
+  .nb-note-time {
+    font-size: 9px;
+    color: rgba(90,78,58,0.38);
+    font-family: 'DM Mono', monospace;
+    margin-top: 3px;
+  }
+
+  .nb-note-del {
+    background: none;
+    border: none;
+    color: rgba(196,64,28,0.45);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: all 0.18s;
+    flex-shrink:0;
+    opacity:0.5;
+  }
+  .nb-note:hover .nb-note-del { opacity:1; }
+  .nb-note-del:hover { color:var(--accent); background:rgba(196,64,28,0.08); }
+
+  .nb-check {
+    width:16px; height:16px;
+    border:1.5px solid rgba(90,78,58,0.3);
+    border-radius:3px;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; margin-top:2px;
+    transition: all 0.18s;
+    font-size:9px; color:transparent;
+  }
+  .nb-check:hover { border-color:var(--sage); }
+  .nb-check.nb-checked { background:var(--sage); border-color:var(--sage); color:#fff; }
+
+  /* "What can I do" tab */
+  .nb-guide {
+    padding: 16px 16px 16px 60px;
+    overflow-y: auto;
+    flex:1;
+    position: relative; z-index:1;
+  }
+  .nb-guide::-webkit-scrollbar { width:3px; }
+  .nb-guide::-webkit-scrollbar-thumb { background: rgba(90,78,58,0.18); border-radius:2px; }
+
+  .guide-section { margin-bottom: 20px; }
+
+  .guide-section-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(196,64,28,0.15);
+  }
+
+  .guide-item {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 5px 0;
+  }
+
+  .guide-icon {
+    font-size: 14px;
+    flex-shrink:0;
+    width:20px;
+    text-align:center;
+    margin-top:1px;
+  }
+
+  .guide-text {
+    font-family: 'Lora', serif;
+    font-size: 12.5px;
+    color: var(--ink);
+    line-height: 1.55;
+  }
+
+  .guide-text strong {
+    font-weight:600;
+    color: var(--ink);
+  }
+
+  .guide-tip {
+    margin-top: 10px;
+    background: rgba(196,154,42,0.1);
+    border-left: 3px solid var(--gold);
+    padding: 8px 12px;
+    border-radius: 0 4px 4px 0;
+    font-family: 'Lora', serif;
+    font-style: italic;
+    font-size: 12px;
+    color: var(--ink-light);
+  }
+
+  /* Notebook toggle button in calendar panel */
+  .nb-toggle-btn {
+    position: relative; z-index:1;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: var(--gold-light);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .nb-toggle-btn:hover {
+    background: rgba(255,255,255,0.15);
+    border-color: rgba(255,255,255,0.3);
+  }
+  .nb-toggle-btn .nb-btn-icon { font-size:15px; }
+  .nb-note-badge {
+    margin-left:auto;
+    background: var(--accent);
+    color:#fff;
+    font-size:9px;
+    width:16px; height:16px;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:600;
+  }
+
+  @media (max-width: 700px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; border-radius: 12px; }
+    .cal-panel { border-radius: 12px 12px 0 0; padding: 24px 20px; }
+    .note-panel { border-radius: 0 0 12px 12px; }
+    .note-panel::after { left: 40px; }
+    .add-bar, .note-header, .tasks-area, .note-footer { padding-left: 52px; }
+    .line-nums { width: 36px; }
+    .notebook { border-radius: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- LEFT: Calendar -->
+  <div class="cal-panel">
+    <div class="cal-header">
+      <div class="cal-title" id="calTitle">March 2026</div>
+      <div class="cal-nav">
+        <button id="prevBtn">&#8249;</button>
+        <button id="nextBtn">&#8250;</button>
+      </div>
+    </div>
+
+    <div class="cal-grid">
+      <div class="dow-row">
+        <div class="dow">Su</div><div class="dow">Mo</div><div class="dow">Tu</div>
+        <div class="dow">We</div><div class="dow">Th</div><div class="dow">Fr</div><div class="dow">Sa</div>
+      </div>
+      <div class="day-grid" id="dayGrid"></div>
+    </div>
+
+    <div class="task-count-bar">
+      <div class="count-label">Tasks for selected day</div>
+      <div class="count-number" id="taskCount">0</div>
+      <div class="count-sub" id="taskSub">No tasks yet — add one!</div>
+      <div class="mini-progress">
+        <div class="mini-progress-bar" id="progressBar" style="width:0%"></div>
+      </div>
+    </div>
+
+    <button class="nb-toggle-btn" id="nbToggleBtn">
+      <span class="nb-btn-icon">📓</span>
+      Mini Notebook
+      <span class="nb-note-badge" id="nbBadge">0</span>
+    </button>
+  </div>
+
+  <!-- RIGHT: Notepad -->
+  <div class="note-panel">
+    <div class="line-nums"></div>
+    <div class="panel-ribbon" id="panelRibbon">Today</div>
+
+    <div class="note-header">
+      <div>
+        <div class="note-date-title" id="noteDateTitle">Tuesday, 31 March 2026</div>
+        <div class="note-date-sub" id="noteDateSub">Day 90 of 2026 · Spring</div>
+      </div>
+    </div>
+
+    <div class="add-bar">
+      <input class="add-input" id="taskInput" type="text" placeholder="Write your next task here…" maxlength="180">
+      <select class="tag-select" id="tagSelect">
+        <option value="work">Work</option>
+        <option value="personal">Personal</option>
+        <option value="urgent">Urgent</option>
+        <option value="health">Health</option>
+        <option value="other">Other</option>
+      </select>
+      <button class="add-btn" id="addBtn">+ Add</button>
+    </div>
+
+    <div class="tasks-area" id="tasksArea">
+      <div class="empty-state" id="emptyState">
+        <span class="empty-icon">✦</span>
+        <p>Nothing here yet.<br>Start by adding a task above.</p>
+      </div>
+    </div>
+
+    <div class="note-footer">
+      <div class="footer-quote" id="footerQuote">"A goal without a plan is just a wish."</div>
+      <div class="filter-btns">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="active">Active</button>
+        <button class="filter-btn" data-filter="done">Done</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ─── State ───────────────────────────────────────────────────────────
+  const today = new Date();
+  let viewYear = today.getFullYear();
+  let viewMonth = today.getMonth();
+  let selectedDate = dateKey(today);
+  let filter = 'all';
+
+  // tasks: { [dateKey]: [{id, text, tag, done, time}] }
+  let tasks = JSON.parse(localStorage.getItem('calpad_tasks') || '{}');
+
+  function dateKey(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function save() {
+    localStorage.setItem('calpad_tasks', JSON.stringify(tasks));
+  }
+
+  // ─── Calendar ────────────────────────────────────────────────────────
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const DOW_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+  function renderCalendar() {
+    document.getElementById('calTitle').textContent = `${MONTHS[viewMonth]} ${viewYear}`;
+    const grid = document.getElementById('dayGrid');
+    grid.innerHTML = '';
+
+    const first = new Date(viewYear, viewMonth, 1).getDay();
+    const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
+    const prevDays = new Date(viewYear, viewMonth, 0).getDate();
+
+    // Prev month filler
+    for (let i = first - 1; i >= 0; i--) {
+      const d = prevDays - i;
+      const cell = document.createElement('div');
+      cell.className = 'day-cell other-month';
+      cell.textContent = d;
+      grid.appendChild(cell);
+    }
+
+    // Current month
+    for (let d = 1; d <= daysInMonth; d++) {
+      const cell = document.createElement('div');
+      cell.className = 'day-cell';
+      cell.textContent = d;
+      const dObj = new Date(viewYear, viewMonth, d);
+      const key = dateKey(dObj);
+
+      if (dateKey(today) === key) cell.classList.add('today');
+      if (selectedDate === key) cell.classList.add('selected');
+      if (tasks[key] && tasks[key].length > 0) cell.classList.add('has-tasks');
+
+      cell.addEventListener('click', () => {
+        selectedDate = key;
+        renderCalendar();
+        renderNotepad();
+      });
+
+      grid.appendChild(cell);
+    }
+
+    // Next month filler
+    const totalCells = first + daysInMonth;
+    const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+    for (let d = 1; d <= remaining; d++) {
+      const cell = document.createElement('div');
+      cell.className = 'day-cell other-month';
+      cell.textContent = d;
+      grid.appendChild(cell);
+    }
+
+    updateCountBar();
+  }
+
+  function updateCountBar() {
+    const list = tasks[selectedDate] || [];
+    const done = list.filter(t => t.done).length;
+    const total = list.length;
+    document.getElementById('taskCount').textContent = total;
+    document.getElementById('taskSub').textContent = total === 0
+      ? 'No tasks yet — add one!'
+      : `${done} of ${total} completed`;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    document.getElementById('progressBar').style.width = pct + '%';
+  }
+
+  document.getElementById('prevBtn').addEventListener('click', () => {
+    viewMonth--; if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+    renderCalendar();
+  });
+  document.getElementById('nextBtn').addEventListener('click', () => {
+    viewMonth++; if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+    renderCalendar();
+  });
+
+  // ─── Notepad ─────────────────────────────────────────────────────────
+  const QUOTES = [
+    '"A goal without a plan is just a wish."',
+    '"Do what you can, with what you have, where you are."',
+    '"Small steps every day lead to big results."',
+    '"One task at a time. Progress, not perfection."',
+    '"Your future is created by what you do today."',
+  ];
+
+  const SEASONS = ['Winter','Spring','Summer','Autumn'];
+  function getSeason(m) { return SEASONS[Math.floor(((m+1)%12)/3)]; }
+
+  function formatSelectedDate() {
+    const [y,m,d] = selectedDate.split('-').map(Number);
+    const obj = new Date(y, m-1, d);
+    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const dayOfYear = Math.floor((obj - new Date(y,0,0)) / 86400000);
+    return {
+      long: `${days[obj.getDay()]}, ${d} ${MONTHS[m-1]} ${y}`,
+      sub: `Day ${dayOfYear} of ${y} · ${getSeason(m-1)}`
+    };
+  }
+
+  function renderNotepad() {
+    // Header
+    const fmt = formatSelectedDate();
+    document.getElementById('noteDateTitle').textContent = fmt.long;
+    document.getElementById('noteDateSub').textContent = fmt.sub;
+
+    // Ribbon
+    const ribbon = document.getElementById('panelRibbon');
+    ribbon.textContent = selectedDate === dateKey(today) ? 'Today' : 'Selected';
+
+    // Quote
+    const qi = Math.floor(Math.random() * QUOTES.length);
+    document.getElementById('footerQuote').textContent = QUOTES[qi];
+
+    // Tasks
+    renderTaskList();
+    updateCountBar();
+  }
+
+  function renderTaskList() {
+    const area = document.getElementById('tasksArea');
+    const list = (tasks[selectedDate] || []).filter(t => {
+      if (filter === 'active') return !t.done;
+      if (filter === 'done') return t.done;
+      return true;
+    });
+
+    const empty = document.getElementById('emptyState');
+
+    // Remove old task items
+    area.querySelectorAll('.task-item').forEach(e => e.remove());
+
+    if (list.length === 0) {
+      empty.style.display = '';
+      return;
+    }
+    empty.style.display = 'none';
+
+    list.forEach(task => {
+      const item = document.createElement('div');
+      item.className = 'task-item';
+
+      const tagClass = `tag-${task.tag}`;
+      const priorityClass = task.tag === 'urgent' ? 'priority-high' : task.tag === 'work' ? 'priority-med' : 'priority-low';
+
+      item.innerHTML = `
+        <div class="priority-dot ${priorityClass}"></div>
+        <div class="task-check ${task.done ? 'checked' : ''}" data-id="${task.id}">
+          <span class="check-mark">✓</span>
+        </div>
+        <div class="task-body">
+          <div class="task-text ${task.done ? 'done' : ''}">${escHtml(task.text)}</div>
+          <div class="task-meta">
+            <span class="task-tag ${tagClass}">${task.tag}</span>
+            <span class="task-time">${task.time}</span>
+          </div>
+        </div>
+        <button class="task-del" data-id="${task.id}" title="Delete">✕</button>
+      `;
+
+      item.querySelector('.task-check').addEventListener('click', () => toggleTask(task.id));
+      item.querySelector('.task-del').addEventListener('click', () => deleteTask(task.id));
+      area.appendChild(item);
+    });
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function addTask() {
+    const input = document.getElementById('taskInput');
+    const tag = document.getElementById('tagSelect').value;
+    const text = input.value.trim();
+    if (!text) return;
+
+    if (!tasks[selectedDate]) tasks[selectedDate] = [];
+    const now = new Date();
+    const time = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    tasks[selectedDate].push({ id: Date.now(), text, tag, done: false, time });
+    save();
+    input.value = '';
+    renderCalendar();
+    renderTaskList();
+    updateCountBar();
+  }
+
+  function toggleTask(id) {
+    const list = tasks[selectedDate] || [];
+    const t = list.find(t => t.id === id);
+    if (t) { t.done = !t.done; save(); renderCalendar(); renderTaskList(); updateCountBar(); }
+  }
+
+  function deleteTask(id) {
+    if (!tasks[selectedDate]) return;
+    tasks[selectedDate] = tasks[selectedDate].filter(t => t.id !== id);
+    if (tasks[selectedDate].length === 0) delete tasks[selectedDate];
+    save();
+    renderCalendar();
+    renderTaskList();
+    updateCountBar();
+  }
+
+  document.getElementById('addBtn').addEventListener('click', addTask);
+  document.getElementById('taskInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addTask();
+  });
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      filter = btn.dataset.filter;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderTaskList();
+    });
+  });
+
+  // ─── Init ─────────────────────────────────────────────────────────────
+  renderCalendar();
+  renderNotepad();
+</script>
+
+<!-- ─── MINI NOTEBOOK OVERLAY ─── -->
+<div class="notebook-overlay" id="notebookOverlay">
+  <div class="notebook">
+    <div class="nb-header">
+      <div class="nb-title-wrap">
+        <div class="nb-title">Mini Notebook</div>
+        <div class="nb-sub">Your personal scratchpad</div>
+      </div>
+      <button class="nb-close" id="nbClose">✕</button>
+    </div>
+
+    <div class="nb-tabs">
+      <button class="nb-tab active" data-tab="notes">📝 Notes</button>
+      <button class="nb-tab" data-tab="guide">💡 What Can I Do?</button>
+    </div>
+
+    <!-- Notes Tab -->
+    <div id="nbNotesTab" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+      <div class="nb-add-bar">
+        <textarea class="nb-input" id="nbInput" placeholder="Jot down anything — ideas, reminders, thoughts…" rows="1"></textarea>
+        <button class="nb-add-btn" id="nbAddBtn">+ Jot</button>
+      </div>
+      <div class="nb-list" id="nbList">
+        <div class="nb-empty" id="nbEmpty">
+          <span>✦</span>
+          <p>Your notebook is empty.<br>Start jotting thoughts above.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Guide Tab -->
+    <div id="nbGuideTab" style="display:none;flex:1;overflow:hidden;flex-direction:column;">
+      <div class="nb-guide">
+
+        <div class="guide-section">
+          <div class="guide-section-title">📅 Calendar</div>
+          <div class="guide-item"><span class="guide-icon">◀▶</span><div class="guide-text"><strong>Navigate months</strong> using the arrow buttons at the top of the calendar.</div></div>
+          <div class="guide-item"><span class="guide-icon">🔴</span><div class="guide-text"><strong>Today</strong> is always highlighted in red so you never lose track.</div></div>
+          <div class="guide-item"><span class="guide-icon">🟡</span><div class="guide-text"><strong>Gold dot</strong> under a date means it has tasks — click any date to view them.</div></div>
+          <div class="guide-item"><span class="guide-icon">✦</span><div class="guide-text"><strong>Selected date</strong> is highlighted in gold. All tasks on the right belong to it.</div></div>
+        </div>
+
+        <div class="guide-section">
+          <div class="guide-section-title">✅ Tasks</div>
+          <div class="guide-item"><span class="guide-icon">➕</span><div class="guide-text"><strong>Add a task</strong> by typing in the input bar and pressing Enter or clicking "+ Add".</div></div>
+          <div class="guide-item"><span class="guide-icon">🏷️</span><div class="guide-text"><strong>Tag your tasks</strong> as Work, Personal, Urgent, Health, or Other to colour-code them.</div></div>
+          <div class="guide-item"><span class="guide-icon">☑️</span><div class="guide-text"><strong>Check off tasks</strong> by clicking the checkbox — completed tasks get a strikethrough.</div></div>
+          <div class="guide-item"><span class="guide-icon">🗑️</span><div class="guide-text"><strong>Delete a task</strong> by clicking the ✕ button visible on every task row.</div></div>
+          <div class="guide-item"><span class="guide-icon">🔍</span><div class="guide-text"><strong>Filter tasks</strong> using All / Active / Done buttons at the bottom of the notepad.</div></div>
+          <div class="guide-item"><span class="guide-icon">📊</span><div class="guide-text"><strong>Progress bar</strong> on the left shows how many tasks you've completed for the day.</div></div>
+        </div>
+
+        <div class="guide-section">
+          <div class="guide-section-title">📓 Mini Notebook</div>
+          <div class="guide-item"><span class="guide-icon">✍️</span><div class="guide-text"><strong>Jot down anything</strong> — ideas, grocery lists, quick reminders, random thoughts.</div></div>
+          <div class="guide-item"><span class="guide-icon">☑️</span><div class="guide-text"><strong>Check off notes</strong> once you're done with them, just like tasks.</div></div>
+          <div class="guide-item"><span class="guide-icon">🗑️</span><div class="guide-text"><strong>Delete notes</strong> using the ✕ button on each note row.</div></div>
+          <div class="guide-item"><span class="guide-icon">🔢</span><div class="guide-text"><strong>Badge count</strong> on the notebook button shows how many notes you have saved.</div></div>
+        </div>
+
+        <div class="guide-section">
+          <div class="guide-section-title">💾 Data & Storage</div>
+          <div class="guide-item"><span class="guide-icon">🔒</span><div class="guide-text"><strong>All data saved locally</strong> in your browser — nothing goes to any server.</div></div>
+          <div class="guide-item"><span class="guide-icon">📶</span><div class="guide-text"><strong>Works fully offline</strong> once the page is loaded. No internet needed.</div></div>
+          <div class="guide-item"><span class="guide-icon">💻</span><div class="guide-text"><strong>Save as a file</strong> (Ctrl+S) and open it anytime — or pin it as a Chrome App for daily use.</div></div>
+        </div>
+
+        <div class="guide-tip">
+          💡 Tip: Click any past date on the calendar to review what you had planned — your old tasks are always there!
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ─── MINI NOTEBOOK ───────────────────────────────────────────────────
+  let notes = JSON.parse(localStorage.getItem('calpad_notes') || '[]');
+
+  function saveNotes() {
+    localStorage.setItem('calpad_notes', JSON.stringify(notes));
+  }
+
+  function updateNbBadge() {
+    document.getElementById('nbBadge').textContent = notes.length;
+  }
+
+  function renderNbList() {
+    const list = document.getElementById('nbList');
+    const empty = document.getElementById('nbEmpty');
+    list.querySelectorAll('.nb-note').forEach(e => e.remove());
+
+    if (notes.length === 0) { empty.style.display = ''; return; }
+    empty.style.display = 'none';
+
+    notes.forEach((note, idx) => {
+      const div = document.createElement('div');
+      div.className = 'nb-note';
+      div.innerHTML = `
+        <div class="nb-check ${note.done ? 'nb-checked' : ''}" data-idx="${idx}">${note.done ? '✓' : ''}</div>
+        <div class="nb-note-body">
+          <div class="nb-note-text ${note.done ? 'done-note' : ''}">${escNb(note.text)}</div>
+          <div class="nb-note-time">${note.time}</div>
+        </div>
+        <button class="nb-note-del" data-idx="${idx}" title="Delete note">✕</button>
+      `;
+      div.querySelector('.nb-check').addEventListener('click', () => {
+        notes[idx].done = !notes[idx].done;
+        saveNotes(); renderNbList();
+      });
+      div.querySelector('.nb-note-del').addEventListener('click', () => {
+        notes.splice(idx, 1);
+        saveNotes(); renderNbList(); updateNbBadge();
+      });
+      list.appendChild(div);
+    });
+  }
+
+  function escNb(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  }
+
+  function addNote() {
+    const inp = document.getElementById('nbInput');
+    const text = inp.value.trim();
+    if (!text) return;
+    const now = new Date();
+    const time = now.toLocaleDateString([], {day:'2-digit',month:'short'}) + ' · ' + now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    notes.unshift({ text, done: false, time });
+    saveNotes(); renderNbList(); updateNbBadge();
+    inp.value = '';
+    inp.style.height = 'auto';
+  }
+
+  document.getElementById('nbAddBtn').addEventListener('click', addNote);
+  document.getElementById('nbInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addNote(); }
+  });
+  document.getElementById('nbInput').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 80) + 'px';
+  });
+
+  // Open / close
+  document.getElementById('nbToggleBtn').addEventListener('click', () => {
+    document.getElementById('notebookOverlay').classList.add('open');
+    renderNbList(); updateNbBadge();
+  });
+  document.getElementById('nbClose').addEventListener('click', () => {
+    document.getElementById('notebookOverlay').classList.remove('open');
+  });
+  document.getElementById('notebookOverlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('notebookOverlay'))
+      document.getElementById('notebookOverlay').classList.remove('open');
+  });
+
+  // Tabs
+  document.querySelectorAll('.nb-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.nb-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      if (tab.dataset.tab === 'notes') {
+        document.getElementById('nbNotesTab').style.display = 'flex';
+        document.getElementById('nbGuideTab').style.display = 'none';
+      } else {
+        document.getElementById('nbNotesTab').style.display = 'none';
+        document.getElementById('nbGuideTab').style.display = 'flex';
+      }
+    });
+  });
+
+  updateNbBadge();
+</script>
+</body>
+</html>
